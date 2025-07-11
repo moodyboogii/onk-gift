@@ -19,28 +19,48 @@ except ImportError as e:
 
 # ✅ 1. GPT 추천 실행 함수
 def run_chatflow(user_info):
-    # 1️⃣ 예산 범위 파싱
-    budget_prompt = make_budget_parsing_prompt(user_info["예산"])
+    # 이미 추천된 상품들 가져오기
+    from modules.session_manager import get_recommended_products, get_language
+    exclude_products = get_recommended_products()
+    current_language = get_language()
+    
+    # 1️⃣ 예산 범위 파싱 (언어별)
+    budget_prompt = make_budget_parsing_prompt(user_info["예산"], current_language)
     budget_result = openai.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": budget_prompt}]
     )
     budget_response_text = budget_result.choices[0].message.content
-    price_min, price_max = extract_price_range(budget_response_text)
+    price_min, price_max = extract_price_range(budget_response_text, current_language)
 
-    # 2️⃣ 필터링된 상품 목록 불러오기 (엑셀에서)
-    filtered_items = load_and_filter_products(price_min, price_max)
+    # 2️⃣ 필터링된 상품 목록 불러오기 (언어별 엑셀 파일) - 중복 제외
+    filtered_items = load_and_filter_products(price_min, price_max, language=current_language, exclude_products=exclude_products)
+    
+    # 상품 수가 부족한 경우 처리
+    if len(filtered_items) < 3:  # 최소 3개 상품이 필요하다고 가정
+        if current_language == "en":
+            st.warning("⚠️ There are insufficient new recommendation products in this budget range. Please refer to existing recommendations.")
+            # 제외 목록 없이 다시 시도
+            filtered_items = load_and_filter_products(price_min, price_max, language=current_language, exclude_products=None)
+            st.info("💡 We've recommended again targeting all products.")
+        else:
+            st.warning("⚠️ 해당 예산 범위에서 새로운 추천 상품이 부족합니다. 기존 추천을 참고해주세요.")
+            # 제외 목록 없이 다시 시도
+            filtered_items = load_and_filter_products(price_min, price_max, language=current_language, exclude_products=None)
+            st.info("💡 모든 상품을 대상으로 다시 추천해드렸습니다.")
 
     # ✅ 진단용 로그
+    print(f"🌐 현재 언어: {current_language}")
     print(f"🔍 예산 범위: {price_min} ~ {price_max}")
+    print(f"🚫 제외할 상품 수: {len(exclude_products)}")
     print(f"📦 상품 개수 (필터링 후): {len(filtered_items)}")
     for i, p in enumerate(filtered_items, 1):
         print(f"{i}. {p['상품명']} | {p['판매가']} | {p['상품 링크']}")
 
-    # 3️⃣ GPT에 전달할 프롬프트 생성
+    # 3️⃣ GPT에 전달할 프롬프트 생성 (언어별)
     messages = [
-        {"role": "system", "content": get_system_prompt()},
-        {"role": "user", "content": make_user_prompt(user_info, filtered_items)}
+        {"role": "system", "content": get_system_prompt(current_language)},
+        {"role": "user", "content": make_user_prompt(user_info, filtered_items, current_language)}
     ]
 
     # 4️⃣ GPT 추천 요청
@@ -65,13 +85,27 @@ import json
 import random
 
 def display_recommendations(gpt_response: str):
+    from modules.session_manager import get_language
+    current_language = get_language()
+    
     try:
         items = json.loads(gpt_response)
     except json.JSONDecodeError:
         print("[GPT 응답 파싱 에러] 원본 응답:")
         print(gpt_response)
-        st.error("추천 결과를 불러오는 데 문제가 발생했어요. 다시 시도해 주세요! (관리자: 콘솔에서 원본 응답을 확인하세요)")
+        if current_language == "en":
+            st.error("There was a problem loading the recommendation results. Please try again! (Admin: Check the original response in the console)")
+        else:
+            st.error("추천 결과를 불러오는 데 문제가 발생했어요. 다시 시도해 주세요! (관리자: 콘솔에서 원본 응답을 확인하세요)")
         return
+
+    # 언어별 텍스트 설정
+    if current_language == "en":
+        price_label = "Price: "
+        button_text = "View Product"
+    else:
+        price_label = "가격: "
+        button_text = "상품 보러가기"
 
     # 아이콘 목록 (랜덤 선택용)
     icons = ["🎁", "✨", "🪄", "🎉", "🌟", "💝", "🧧"]
@@ -193,13 +227,22 @@ def display_recommendations(gpt_response: str):
         with st.container():
             icon = random.choice(icons)
 
-            # 천 단위 쉼표 + '원' 붙이기
+            # 언어별 가격 표시 처리
             raw_price = item["가격"]
             try:
-                price_number = int(str(raw_price).replace("원", "").replace(",", "").strip())
-                price = f"{price_number:,}원"
+                if current_language == "en":
+                    # 달러 표시
+                    price_number = float(str(raw_price).replace("$", "").replace(",", "").strip())
+                    price = f"${price_number:.2f}"
+                else:
+                    # 원화 표시 (천 단위 쉼표 + '원' 붙이기)
+                    price_number = int(str(raw_price).replace("원", "").replace(",", "").strip())
+                    price = f"{price_number:,}원"
             except ValueError:
-                price = raw_price if "원" in raw_price else f"{raw_price}원"
+                if current_language == "en":
+                    price = raw_price if "$" in str(raw_price) else f"${raw_price}"
+                else:
+                    price = raw_price if "원" in str(raw_price) else f"{raw_price}원"
 
             st.markdown(f"""
             <div class="recommendation-card">
@@ -216,7 +259,7 @@ def display_recommendations(gpt_response: str):
                                 🎁 {item['상품명']}
                             </div>
                             <div style="font-size: 1.1rem; color: #333; font-weight: 600; margin-bottom: 8px;">
-                                가격: {price}
+                                {price_label}{price}
                             </div>
                             <div style="color: #666; line-height: 1.6; margin-bottom: 15px;">
                                 ✨ {item['설명']}
@@ -225,7 +268,7 @@ def display_recommendations(gpt_response: str):
                         <div>
                             <a href="{item['링크']}" target="_blank" style="text-decoration: none;">
                                 <button class="product-link-button">
-                                    상품 보러가기
+                                    {button_text}
                                 </button>
                             </a>
                         </div>

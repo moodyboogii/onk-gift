@@ -48,6 +48,12 @@ def render_custom_styles():
             text-align: center;
         }
         
+        /* 언어 링크 호버 효과 */
+        a[href*="lang"]:hover {
+            color: #666 !important;
+            text-decoration: none !important;
+        }
+        
         /* 채팅 말풍선 컨테이너 */
         .bubble-container {
             display: flex;
@@ -262,8 +268,44 @@ def render_custom_styles():
 
 def render_header():
     """페이지 헤더 렌더링"""
-    st.markdown('<div class="onk-title">ON:K | K‑선물 추천 챗봇</div>', unsafe_allow_html=True)
-    st.markdown('<div class="onk-subtitle">한국의 아름다움을 담은 선물로, 온기를 켜다</div>', unsafe_allow_html=True)
+    from modules.session_manager import get_language, set_language
+    current_language = get_language()
+    
+    # 타이틀을 언어에 따라 설정
+    if current_language == "en":
+        title_html = '<div class="onk-title">ON:K | K‑Gift Recommendation Chatbot</div>'
+        lang_links = """
+        <div style="text-align: center; margin: 15px 0; font-size: 1rem;">
+            <a href="?lang=ko" target="_self" style="color: #999; text-decoration: none; transition: color 0.2s;">한국어</a>
+            <span style="color: #ccc; margin: 0 8px;">|</span>
+            <span style="color: #a89660; font-weight: bold;">English</span>
+        </div>
+        """
+    else:
+        title_html = '<div class="onk-title">ON:K | K‑선물 추천 챗봇</div>'
+        lang_links = """
+        <div style="text-align: center; margin: 15px 0; font-size: 1rem;">
+            <span style="color: #a89660; font-weight: bold;">한국어</span>
+            <span style="color: #ccc; margin: 0 8px;">|</span>
+            <a href="?lang=en" target="_self" style="color: #999; text-decoration: none; transition: color 0.2s;">English</a>
+        </div>
+        """
+    
+    # 렌더링
+    st.markdown(title_html, unsafe_allow_html=True)
+    st.markdown(lang_links, unsafe_allow_html=True)
+    
+    # URL 파라미터 체크하여 언어 변경
+    query_params = st.query_params
+    if "lang" in query_params:
+        new_lang = query_params["lang"]
+        if new_lang in ["ko", "en"] and new_lang != current_language:
+            set_language(new_lang)
+            # URL에서 파라미터 제거
+            st.query_params.clear()
+            st.rerun()
+    
+    st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
 
 def bold_markdown_to_html(text):
@@ -292,64 +334,131 @@ def scroll_to_bottom():
 
 def render_action_buttons():
     """하단 액션 버튼들 렌더링 - 업로드된 디자인 적용"""
+    from modules.session_manager import get_language
+    current_language = get_language()
+    
+    if current_language == "en":
+        retry_text = "🎁 Get More Gift"
+        restart_text = "💬 Start Over"
+        store_text = "Visit K-Heritage Store"
+        store_url = "https://en.khstore.or.kr/"
+    else:
+        retry_text = "🎁 한번 더 추천받기"
+        restart_text = "💬 처음부터 다시하기"
+        store_text = "K-헤리티지 스토어 방문하기"
+        store_url = "https://khstore.or.kr/"
+    
     # 모바일에서도 잘 보이도록 레이아웃 개선
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        retry_button = st.button("🎁 한번 더 추천받기", use_container_width=True)
+        retry_button = st.button(retry_text, use_container_width=True)
     
     with col2:
-        restart_button = st.button("💬 처음부터 다시하기", use_container_width=True)
+        restart_button = st.button(restart_text, use_container_width=True)
     
     with col3:
-        st.link_button("K-헤리티지 스토어 방문하기", "https://khstore.or.kr/", use_container_width=True)
+        st.link_button(store_text, store_url, use_container_width=True)
     
     return retry_button, restart_button
 
 
 def display_recommendation_title(index=1):
     """추천 제목 표시"""
-    if index == 1:
-        title_msg = "💝 온:케이의 K-선물 추천 리스트"
+    from modules.session_manager import get_language
+    current_language = get_language()
+    
+    if current_language == "en":
+        if index == 1:
+            title_msg = "💝 ON:K's K-Gift Recommendation List"
+        else:
+            title_msg = f"💝 {index}th K-Gift List"
     else:
-        title_msg = f"💝 {index}번째 K-선물 리스트"
+        if index == 1:
+            title_msg = "💝 온:케이의 K-선물 추천 리스트"
+        else:
+            title_msg = f"💝 {index}번째 K-선물 리스트"
     
     st.markdown(f"<div style='font-size:1.8rem; font-weight:700; margin-top:1rem;'>{title_msg}</div>", unsafe_allow_html=True)
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 
 def render_brand_introduction(disabled=False):
-    """브랜드 소개 및 시작 버튼 렌더링 - 업로드된 디자인 적용"""
+    """브랜드 소개 및 시작 버튼 렌더링 - 다국어 지원"""
+    from modules.session_manager import get_language
+    current_language = get_language()
+    
     with st.container():
         # 헤리티지 이미지
         st.image("static/heritage_img.jpg", use_container_width=True)
         
-        # 브랜드 소개 카드 - 업로드된 디자인 스타일 적용 (앵커 링크 제거)
-        st.markdown(
-            """
-            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; border: 1px solid #ddd; margin-top: -5px;">
-                <div style="color: #333; font-size: 20px; font-weight: bold; margin-top: 5px; margin-bottom: 10px;">❤️ 당신의 온기를 K-선물로 전해보세요</div>
-                <p style="color: #555; font-size: 16px; margin-bottom: 5px;"><b>ON:K</b>(온:케이)는 <b>대화형 AI를 활용한 K-헤리티지 스토어 상품 추천 서비스</b>입니다.<br>
-                전통과 현대가 어우러진 <b>한국 문화 상품 중에서 당신의 상황에 딱 맞는 특별한 선물</b>을 찾아드려요.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        # 브랜드 소개 카드 - 언어별 내용
+        if current_language == "en":
+            st.markdown(
+                """
+                <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; border: 1px solid #ddd; margin-top: -5px;">
+                    <div style="color: #333; font-size: 20px; font-weight: bold; margin-top: 5px; margin-bottom: 10px;">❤️ Share your warmth with K-Gifts</div>
+                    <p style="color: #555; font-size: 16px; margin-bottom: 5px;"><b>ON:K</b> is a <b>K-Heritage Store product recommendation service using conversational AI</b>.<br>
+                    We help you find <b>special gifts that perfectly match your situation</b> from Korean cultural products that blend tradition and modernity.</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                """
+                <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; border: 1px solid #ddd; margin-top: -5px;">
+                    <div style="color: #333; font-size: 20px; font-weight: bold; margin-top: 5px; margin-bottom: 10px;">❤️ 당신의 온기를 K-선물로 전해보세요</div>
+                    <p style="color: #555; font-size: 16px; margin-bottom: 5px;"><b>ON:K</b>(온:케이)는 <b>대화형 AI를 활용한 K-헤리티지 스토어 상품 추천 서비스</b>입니다.<br>
+                    전통과 현대가 어우러진 <b>한국 문화 상품 중에서 당신의 상황에 딱 맞는 특별한 선물</b>을 찾아드려요.</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
         
-        # 버튼 표시 로직 - 심플화
+        # 버튼 표시 로직 - 선택된 언어에 따라 하나의 버튼만 표시
         if not disabled and not st.session_state.get('interview_completed', False) and not st.session_state.get('interview_started', False):
-            # 인터뷰 시작 전에만 버튼 표시
+            # 인터뷰 시작 전에만 버튼 표시 - 선택된 언어에 맞는 버튼 하나만
             col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                return st.button("🎁 선물 추천받기", use_container_width=True, type="primary")
+            with col2:  # 가운데 정렬
+                if current_language == "en":
+                    clicked = st.button("Get Gift Recommendations", use_container_width=True, type="primary")
+                else:
+                    clicked = st.button("선물 추천받기", use_container_width=True, type="primary")
+                
+                if clicked:
+                    return True
+        
         # 인터뷰 시작 후 또는 완료 후 - 버튼 없이 브랜드 소개만 표시
         return False
 
 
 def render_copyright():
     """저작권 표시 렌더링"""
-    st.markdown("""
+    from modules.session_manager import get_language
+    current_language = get_language()
+    
+    if current_language == "en":
+        copyright_html = """
+        <div style="
+            text-align: center; 
+            color: #666; 
+            font-size: 0.85rem; 
+            margin-top: 2rem; 
+            margin-bottom: 1rem; 
+            padding: 1rem; 
+            border-top: 1px solid #e9ecef;
+        ">
+            © 2025 ON:K | Yoonjeong Heo × K-Heritage Store<br>
+            <span style="font-size: 0.8rem; color: #888;">
+                Korean cultural gift recommendations powered by AI
+            </span>
+        </div>
+        """
+    else:
+        copyright_html = """
         <div style="
             text-align: center; 
             color: #666; 
@@ -364,4 +473,6 @@ def render_copyright():
                 한국의 아름다운 전통문화 상품을 상황에 맞게 추천해주는 AI 챗봇
             </span>
         </div>
-    """, unsafe_allow_html=True)
+        """
+    
+    st.markdown(copyright_html, unsafe_allow_html=True)

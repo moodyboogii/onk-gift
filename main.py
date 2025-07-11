@@ -79,8 +79,9 @@ def main():
             # 인터뷰 완료 후 - 시작 버튼 없이 브랜드 소개만 표시
             render_brand_introduction(disabled=True)
         
-        # 5. 채팅 메시지 렌더링
-        render_chat_messages()
+        # 5. 채팅 메시지 렌더링 (추천 완료 후 또는 재추천 모드에서는 숨김)
+        if not is_recommendations_completed() and not st.session_state.get('is_retry_mode', False):
+            render_chat_messages()
         
         # 6. 플로우 처리
         _handle_flow_logic()

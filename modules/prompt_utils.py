@@ -1,150 +1,46 @@
-# GPT의 역할을 지정하는 시스템 프롬프트
+# 통합 프롬프트 유틸리티 - 언어별 분기 처리
 
-def get_system_prompt():
-    return """
-당신은 'K-Heritage Store 한국 문화 상품 큐레이터'입니다.
-
-사용자의 상황과 감성에 맞는 한국문화 상품 선물을 추천하기 위해,
-먼저 감성적인 대화를 통해 아래 4가지 정보를 하나씩 유도해 수집하세요:
-
-1. 선물 대상 (예: 친구, 부모님, 외국인 지인 등)
-2. 선물 목적 (예: 생일, 감사, 작별, 프로젝트 종료 등)
-3. 분위기/스타일 (예: 전통적인, 귀여움, 고급스러움, 차분함 등)
-4. 예산 범위 (예: 3만 원대, 5만 원 이하 등)
-
----
-
-💬 대화 방식 지침:
-
-- 각 항목(대상, 목적, 분위기, 예산)은 반드시 하나씩 자연스럽게 질문하세요.
-- 사용자의 답변을 반영해 맥락 있게 다음 질문을 이어가세요.
-- 중요 키워드(예: 목적, 분위기, 스타일, 예산)는 볼드체로 강조해 가독성을 높이세요.
-- **질문과 답변은 문단을 나눠 읽기 쉽게 구성하세요.**
-- 질문에는 사용자의 답변을 도와줄 수 있는 현실적인 예시를 자연스럽게 섞으세요.
-- 대화 중간중간 공감이나 감성적인 리액션을 섞어 기계적인 느낌을 피하세요.
-- 스타일(분위기) 질문은 '대상'과 '상황'과 연결해 자연스럽게 물어보세요. 예) "은사님께 드리는 선물이라면 고급스럽고 차분한 분위기가 좋을까요?"
-- 대상과 상황에 따라 한국 문화가 담긴 상품이 왜 특별한지, 어떤 감동이나 좋은 반응을 줄 수 있는지 구체적으로 언급하세요.  
-- 예산 질문 시 금액을 명확히 숫자로 말하도록 유도하세요.
-👉 예산은 “3~5만원대”처럼 구간으로 제시해 주시면 추천이 더 정확해요.
+from modules.prompt_utils_ko import (
+    get_system_prompt_ko, 
+    make_user_prompt_ko, 
+    make_budget_parsing_prompt_ko, 
+    extract_price_range_ko
+)
+from modules.prompt_utils_en import (
+    get_system_prompt_en, 
+    make_user_prompt_en, 
+    make_budget_parsing_prompt_en, 
+    extract_price_range_en
+)
 
 
-- **예산 질문 시**, 금액을 명확히 숫자로 말하도록 유도하세요.
-  👉 예산은 “3~5만원대”처럼 **구간으로 제시해 주시면 추천이 더 정확해요.**
-
-- 모든 정보가 모이면, 아래와 같은 형식으로 정리하고 "[인터뷰 완료]" 문구를 포함해주세요.
-
-📦 JSON 출력 예시:
-[인터뷰 완료]
-{
-  "대상": "외국인 친구",
-  "상황": "방한 기념 선물",
-  "분위기": "귀엽고 유쾌한 느낌",
-  "예산": "30000~50000원"
-}
-
----
-
-📘 브랜드 메시지: "전통의 온기를 켜다"
-- 따뜻하고 일상적인 말투로 한국 문화가 담긴 상품의 매력을 표현해주세요.
-- 과하지 않은 감성, 소박하고 자연스러운 정서를 담아주세요.
-"""
+def get_system_prompt(language="ko"):
+    """언어에 따른 시스템 프롬프트 반환"""
+    if language == "en":
+        return get_system_prompt_en()
+    else:
+        return get_system_prompt_ko()
 
 
-# 사용자 정보를 바탕으로 추천 프롬프트를 생성하는 함수
-
-def make_user_prompt(user_info: dict, items: list):
-    info = f"""
-[사용자 정보]
-- 선물 대상: {user_info.get('대상')}
-- 선물 상황: {user_info.get('상황')}
-- 선호 분위기: {user_info.get('분위기')}
-- 예산: {user_info.get('예산')}
-"""
-
-    item_text = "\n".join([
-        f"{i+1}. {item['상품명']} - {item['판매가']} - 링크: {item['상품 링크']} - 이미지: {item['상품 이미지']}"
-        for i, item in enumerate(items)
-    ])
-
-    return f"""
-{info}
-
-[후보 상품 리스트]
-{item_text}
-
-이 중에서 사용자와 잘 어울리는 3개 상품을 골라 감성적으로 추천해주세요.
-
-**중요: 각 추천 항목의 제목에는 아래 내용을 반영해야 합니다.**
-- 사용자의 선물 상황과 감성(예: 부모님 생신, 따뜻한 분위기 등)
-- 상품의 고유한 특징(상품명과 이미지 정보 기반)
-- **동일한 단어**를 여러 제목에 반복 사용하지 마세요.
-
-💬 작성 방식 지침:
-- 상품 설명은 사용자 맥락과 상품명을 바탕으로 직접 작성해주세요.
-- 상품의 소재, 쓰임새, 감성, 추천 이유 등 다양한 정보를 자연스럽게 녹여주세요.
-- 상품 설명은 200자 이내로 작성해주세요.
-- 아래의 JSON 형식으로 추천 결과를 구성해주세요.
-- 반드시 후보 상품 리스트 중에서만 선택해주세요.
-- 출력 외에 설명 문장은 넣지 말고, JSON 리스트만 반환해주세요.
-
-[
-  {{
-    "제목": "감성 키워드 제목",
-    "상품명": "...",
-    "가격": "...",
-    "설명": "...",
-    "링크": "...",
-    "이미지": "..."
-  }},
-  ...
-]
-"""
+def make_user_prompt(user_info: dict, items: list, language="ko"):
+    """언어에 따른 사용자 프롬프트 생성"""
+    if language == "en":
+        return make_user_prompt_en(user_info, items)
+    else:
+        return make_user_prompt_ko(user_info, items)
 
 
-# 예산 표현을 숫자 범위로 변환하는 프롬프트
+def make_budget_parsing_prompt(budget_input: str, language="ko"):
+    """언어에 따른 예산 파싱 프롬프트 생성"""
+    if language == "en":
+        return make_budget_parsing_prompt_en(budget_input)
+    else:
+        return make_budget_parsing_prompt_ko(budget_input)
 
-def make_budget_parsing_prompt(budget_input: str):
-    return f"""
-당신은 사용자의 예산 표현을 숫자 범위로 변환하는 도우미입니다.
 
-아래는 예시입니다:
-- "5~7만원대" → 최소: 50000, 최대: 70000
-- "10만원 미만" → 최소: 0, 최대: 100000
-- "3만원 이하" → 최소: 0, 최대: 30000
-- "7만원 초과" → 최소: 70001, 최대: 무제한
-- "5만원 이상" → 최소: 50000, 최대: 무제한
-- "7만원" → 최소: 70000, 최대: 70000
-
-사용자의 입력: "{budget_input}"
-
-다음 형식으로만 응답하세요:
-최소: xxxx  
-최대: xxxx
-"""
-
-# GPT 응답에서 가격 범위를 추출하는 함수 (int 범위로 변환)
-
-def extract_price_range(response_text):
-    lines = response_text.strip().split("\n")
-    price_min, price_max = None, None
-
-    for line in lines:
-        if "최소" in line:
-            price_min = int(''.join(filter(str.isdigit, line)))
-        elif "최대" in line:
-            digits = ''.join(filter(str.isdigit, line))
-            if digits:
-                price_max = int(digits)
-
-    # ✅ 조건별 fallback 처리
-    if price_min is None and price_max is not None:
-        price_min = 0
-    if price_max is None and price_min is not None:
-        price_max = 999999
-
-    # ✅ 둘 다 None일 경우 fallback (GPT 해석 실패)
-    if price_min is None and price_max is None:
-        print("⚠️ 예산 파싱 실패: 기본값 30000~50000 사용")
-        price_min, price_max = 30000, 50000
-
-    return price_min, price_max
+def extract_price_range(response_text, language="ko"):
+    """언어에 따른 가격 범위 추출"""
+    if language == "en":
+        return extract_price_range_en(response_text)
+    else:
+        return extract_price_range_ko(response_text)
